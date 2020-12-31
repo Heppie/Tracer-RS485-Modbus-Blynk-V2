@@ -28,7 +28,6 @@
 #define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
 
 const int defaultBaudRate = 115200;
-int timerTask1, timerTask2, timerTask3;
 float battChargeCurrent, battDischargeCurrent, battOverallCurrent, battChargePower;
 float bvoltage, ctemp, btemp, bremaining, lpower, lcurrent, pvvoltage, pvcurrent, pvpower;
 float stats_today_pv_volt_min, stats_today_pv_volt_max;
@@ -40,7 +39,7 @@ bool loadPoweredOn = true;
 #define MAX485_RE_NEG D2
 
 ModbusMaster node;
-SimpleTimer timer;
+BlynkTimer timer;
 
 void preTransmission() {
   digitalWrite(MAX485_RE_NEG, 1);
@@ -50,29 +49,6 @@ void preTransmission() {
 void postTransmission() {
   digitalWrite(MAX485_RE_NEG, 0);
   digitalWrite(MAX485_DE, 0);
-}
-
-// A list of the regisities to query in order
-typedef void (*RegistryList[])();
-
-RegistryList Registries = {
-  AddressRegistry_3100,
-  AddressRegistry_3106,
-  AddressRegistry_310D,
-  AddressRegistry_311A,
-  AddressRegistry_331B,
-};
-
-// keep log of where we are
-uint8_t currentRegistryNumber = 0;
-
-// function to switch to next registry
-void nextRegistryNumber() {
-  // better not use modulo, because after overlow it will start reading in incorrect order
-  currentRegistryNumber++;
-  if (currentRegistryNumber >= ARRAY_SIZE(Registries)) {
-    currentRegistryNumber = 0;
-  }
 }
 
 // ****************************************************************************
@@ -167,9 +143,7 @@ void setup()
   Serial.println(WiFi.localIP());
   Serial.println("Starting timed actions...");
   
-  timerTask1 = timer.setInterval(1000L, executeCurrentRegistryFunction);
-  timerTask2 = timer.setInterval(1000L, nextRegistryNumber);
-  timerTask3 = timer.setInterval(1000L, uploadToBlynk);
+  timer.setInterval(15000L, readRegistriesAndUpload);
 
   Serial.println("Setup OK!");
   Serial.println("----------------------------");
@@ -180,6 +154,7 @@ void setup()
   
   // upload values
   void uploadToBlynk() {
+    Serial.println("Uploading to Blynk.");
     Blynk.virtualWrite(vPIN_PV_POWER,                   pvpower);
     Blynk.virtualWrite(vPIN_PV_CURRENT,                 pvcurrent);
     Blynk.virtualWrite(vPIN_PV_VOLTAGE,                 pvvoltage);
@@ -195,9 +170,13 @@ void setup()
     Blynk.virtualWrite(vPIN_LOAD_ENABLED,               loadPoweredOn);
   }
   
-  // exec a function of registry read (cycles between different addresses)
-  void executeCurrentRegistryFunction() {
-    Registries[currentRegistryNumber]();
+  void readRegistriesAndUpload() {
+    AddressRegistry_3100();
+    AddressRegistry_3106();
+    AddressRegistry_310D();
+    AddressRegistry_311A();
+    AddressRegistry_331B();
+    uploadToBlynk();
   }
   
   uint8_t setOutputLoadPower(uint8_t state) {
@@ -305,6 +284,9 @@ void setup()
       battChargeCurrent = node.getResponseBuffer(0x05) / 100.0f;
       Serial.print("Battery Charge Current: ");
       Serial.println(battChargeCurrent);
+    } else {
+      rs485DataReceived = false;
+      Serial.println("Read register 0x3100 failed!");
     }
   }
 
@@ -316,6 +298,9 @@ void setup()
       battChargePower = (node.getResponseBuffer(0x00) | node.getResponseBuffer(0x01) << 16)  / 100.0f;
       Serial.print("Battery Charge Power: ");
       Serial.println(battChargePower);
+    } else {
+      rs485DataReceived = false;
+      Serial.println("Read register 0x3106 failed!");
     }
   }
 
