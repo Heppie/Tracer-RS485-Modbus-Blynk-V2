@@ -28,12 +28,14 @@
 #define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
 
 const int defaultBaudRate = 115200;
+int timerTask1, timerTask2, timerTask3;
 float battChargeCurrent, battDischargeCurrent, battOverallCurrent, battChargePower;
 float bvoltage, ctemp, btemp, bremaining, lpower, lcurrent, pvvoltage, pvcurrent, pvpower;
 float stats_today_pv_volt_min, stats_today_pv_volt_max;
 uint8_t result;
 bool rs485DataReceived = true;
 bool loadPoweredOn = true;
+String chargingStatus;
 
 #define MAX485_DE D1
 #define MAX485_RE_NEG D2
@@ -143,7 +145,7 @@ void setup()
   Serial.println(WiFi.localIP());
   Serial.println("Starting timed actions...");
   
-  timer.setInterval(15000L, readRegistriesAndUpload);
+  timer.setInterval(10000L, readAndUpload);
 
   Serial.println("Setup OK!");
   Serial.println("----------------------------");
@@ -154,7 +156,6 @@ void setup()
   
   // upload values
   void uploadToBlynk() {
-    Serial.println("Uploading to Blynk.");
     Blynk.virtualWrite(vPIN_PV_POWER,                   pvpower);
     Blynk.virtualWrite(vPIN_PV_CURRENT,                 pvcurrent);
     Blynk.virtualWrite(vPIN_PV_VOLTAGE,                 pvvoltage);
@@ -168,24 +169,205 @@ void setup()
     Blynk.virtualWrite(vPIN_BATTERY_CHARGE_POWER,       battChargePower);
     Blynk.virtualWrite(vPIN_BATTERY_OVERALL_CURRENT,    battOverallCurrent);
     Blynk.virtualWrite(vPIN_LOAD_ENABLED,               loadPoweredOn);
+    Blynk.virtualWrite(vPIN_CHARGING_STATUS,            chargingStatus);
   }
-  
-  void readRegistriesAndUpload() {
-    AddressRegistry_3100();
-    AddressRegistry_3106();
-    AddressRegistry_310D();
-    AddressRegistry_311A();
-    AddressRegistry_331B();
+
+  void readAndUpload(){
+    readPVVoltage();
+    readPVCurrent();
+    readPVPower();
+    readBattVoltage();
+    readBattChargeCurrent();
+    readBattChargePower();
+    readLoadCurrent();
+    readLoadPower();
+    readBattTemp();
+    readBattSOC();
+    readLoadState();
+    readChargingStatus();
     uploadToBlynk();
   }
+
+  void readPVVoltage(){
+    result = node.readInputRegisters(0x3100, 1);
+   
+    if (result == node.ku8MBSuccess) {    
+      pvvoltage = node.getResponseBuffer(0x00) / 100.0f;
+      Serial.print("PV Voltage: ");
+      Serial.println(pvvoltage);
+    } else {
+      Serial.println("Read register 0x3100 failed!");
+    }
+    delay(500);
+  }
+
+  void readPVCurrent(){
+    result = node.readInputRegisters(0x3101, 1);
+
+    if (result == node.ku8MBSuccess) {
+      pvcurrent = node.getResponseBuffer(0x00) / 100.0f;
+        Serial.print("PV Current: ");
+        Serial.println(pvcurrent);
+    } else {
+      Serial.println("Read register 0x3101 failed!");
+    }
+    delay(500);
+  }
+
+  void readPVPower(){
+    result = node.readInputRegisters(0x3102, 2);
   
+    if (result == node.ku8MBSuccess) {  
+      pvpower = (node.getResponseBuffer(0x00) | node.getResponseBuffer(0x01) << 16) / 100.0f;
+      Serial.print("PV Power: ");
+      Serial.println(pvpower);
+    } else {
+      Serial.println("Read register 0x3102 0x3103 failed!");
+    }
+    delay(500);
+  }
+
+  void readBattVoltage(){
+    result = node.readInputRegisters(0x3104, 1);
+
+    if (result == node.ku8MBSuccess) {
+      bvoltage = node.getResponseBuffer(0x00) / 100.0f;
+      Serial.print("Battery Voltage: ");
+      Serial.println(bvoltage);
+    } else {
+      Serial.println("Read register 0x3104 failed!");
+    }
+    delay(500);
+  }
+
+  void readBattChargeCurrent(){
+    result = node.readInputRegisters(0x3105, 1);
+
+    if (result == node.ku8MBSuccess) {
+      battChargeCurrent = node.getResponseBuffer(0x00) / 100.0f;
+      Serial.print("Battery Charge Current: ");
+      Serial.println(battChargeCurrent);
+    } else {
+      Serial.println("Read register 0x3105 failed!");
+    }
+    delay(500);
+  }
+
+  void readBattChargePower(){
+    result = node.readInputRegisters(0x3106, 2);
+
+    if (result == node.ku8MBSuccess) {
+      battChargePower = (node.getResponseBuffer(0x00) | node.getResponseBuffer(0x01) << 16)  / 100.0f;
+      Serial.print("Battery Charge Power: ");
+      Serial.println(battChargePower);
+    } else {
+      Serial.println("Read register 0x3106 0x3107 failed!");
+    }
+    delay(500);
+  }
+
+  void readLoadCurrent(){
+    result = node.readInputRegisters(0x310D, 1);
+
+    if (result == node.ku8MBSuccess) {
+      lcurrent = node.getResponseBuffer(0x00) / 100.0f;
+      Serial.print("Load Current: ");
+      Serial.println(lcurrent);
+    } else {
+      Serial.println("Read register 0x310D failed!");
+    }
+    delay(500);
+  }
+
+  void readLoadPower(){
+    result = node.readInputRegisters(0x310E, 2);
+
+    if (result == node.ku8MBSuccess) {
+      lpower = (node.getResponseBuffer(0x00) | node.getResponseBuffer(0x01) << 16) / 100.0f;
+      Serial.print("Load Power: ");
+      Serial.println(lpower);
+    } else {
+      Serial.println("Read register 0x310E 0x310F failed!");
+    }
+    delay(500);
+  }
+
+  void readBattTemp(){
+    result = node.readInputRegisters(0x3110, 1);
+
+    if (result == node.ku8MBSuccess) {
+      btemp = node.getResponseBuffer(0x00) / 100.0f;
+      Serial.print("Battery Temperature: ");
+      Serial.println(btemp);
+    } else {
+      Serial.println("Read register 0x3110 failed!");
+    }
+    delay(500);
+  }
+
+  
+
+  void readBattSOC(){
+    result = node.readInputRegisters(0x311A, 1);
+   
+    if (result == node.ku8MBSuccess) {    
+      bremaining = node.getResponseBuffer(0x00) / 1.0f;
+      Serial.print("Battery Remaining %: ");
+      Serial.println(bremaining);
+    } else {
+      Serial.println("Read register 0x311A failed!");
+    }
+    delay(500);
+  }
+
+  void readLoadState(){
+    result = node.readCoils(0x0002, 1);
+
+    if (result == node.ku8MBSuccess){
+      loadPoweredOn = node.getResponseBuffer(0x00) / 1.0f;
+      Serial.print("Load State: ");
+      Serial.println(loadPoweredOn);
+    } else {
+      Serial.println("Read Load State failed!");
+    }
+    delay(500);
+  }
+
+  void readChargingStatus(){
+    result = node.readInputRegisters(0x3201,1);
+    if (result == node.ku8MBSuccess) {
+      uint16_t output;
+      output = (node.getResponseBuffer(0x00) >> 2) & 3;
+      switch (output){
+        case 0b00:
+          chargingStatus = "No Charging";
+          break;
+        case 0b01:
+          chargingStatus = "Float";
+          break;
+        case 0b10:
+          chargingStatus = "Boost";
+          break;
+        case 0b11:
+          chargingStatus = "Equalisation";
+          break;
+      }
+      Serial.print("Charging Status: ");
+      
+    } else {
+      Serial.println("Read Charging Status Failed");
+    }
+    delay(500);
+  }
+  
+
   uint8_t setOutputLoadPower(uint8_t state) {
-    Serial.print("Writing coil 0x0006 value to: ");
+    Serial.print("Writing coil 0x0002 value to: ");
     Serial.println(state);
 
     delay(10);
-    // Set coil at address 0x0006 (Force the load on/off)
-    result = node.writeSingleCoil(0x0006, state);
+    // Set coil at address 0x0002 (Force the load on/off)
+    result = node.writeSingleCoil(0x0002, state);
 
     if (result == node.ku8MBSuccess) {
       node.getResponseBuffer(0x00);
@@ -194,7 +376,7 @@ void setup()
 
     return result;
   }
-  
+ 
   // callback to on/off button state changes from the Blynk app
   BLYNK_WRITE(vPIN_LOAD_ENABLED) {
     uint8_t newState = (uint8_t)param.asInt();
@@ -203,154 +385,11 @@ void setup()
     Serial.println(newState);
 
     result = setOutputLoadPower(newState);
-    //readOutputLoadState();
-    result &= checkLoadCoilState();
-    
-    if (result == node.ku8MBSuccess) {
-      Serial.println("Write & Read suceeded.");
-    } else {
-      Serial.println("Write & Read failed.");
-    }
-    
-    Serial.print("Output Load state value: ");
-    Serial.println(loadPoweredOn);
-    Serial.println();
-    Serial.println("Uploading results to Blynk.");
-        
-    uploadToBlynk();
+
+
   }
   
-  uint8_t readOutputLoadState() {
-    delay(10);
-    result = node.readHoldingRegisters(0x903D, 1);
-    
-    if (result == node.ku8MBSuccess) {
-      loadPoweredOn = (node.getResponseBuffer(0x00) & 0x02) > 0;
-  
-      Serial.print("Set success. Load: ");
-      Serial.println(loadPoweredOn);
-    } else {
-      // update of status failed
-      Serial.println("readHoldingRegisters(0x903D, 1) failed!");
-    }
-    return result;
-  }
-  
-  // reads Load Enable Override coil
-  uint8_t checkLoadCoilState() {
-    Serial.print("Reading coil 0x0006... ");
 
-    delay(10);
-    result = node.readCoils(0x0006, 1);
-    
-    Serial.print("Result: ");
-    Serial.println(result);
-
-    if (result == node.ku8MBSuccess) {
-      loadPoweredOn = (node.getResponseBuffer(0x00) > 0);
-
-      Serial.print(" Value: ");
-      Serial.println(loadPoweredOn);
-    } else {
-      Serial.println("Failed to read coil 0x0006!");
-    }
-
-    return result;
- }
-
-// -----------------------------------------------------------------
-
-  void AddressRegistry_3100() {
-    result = node.readInputRegisters(0x3100, 6);
-  
-    if (result == node.ku8MBSuccess) {
-      
-      pvvoltage = node.getResponseBuffer(0x00) / 100.0f;
-      Serial.print("PV Voltage: ");
-      Serial.println(pvvoltage);
-  
-      pvcurrent = node.getResponseBuffer(0x01) / 100.0f;
-      Serial.print("PV Current: ");
-      Serial.println(pvcurrent);
-  
-      pvpower = (node.getResponseBuffer(0x02) | node.getResponseBuffer(0x03) << 16) / 100.0f;
-      Serial.print("PV Power: ");
-      Serial.println(pvpower);
-      
-      bvoltage = node.getResponseBuffer(0x04) / 100.0f;
-      Serial.print("Battery Voltage: ");
-      Serial.println(bvoltage);
-      
-      battChargeCurrent = node.getResponseBuffer(0x05) / 100.0f;
-      Serial.print("Battery Charge Current: ");
-      Serial.println(battChargeCurrent);
-    } else {
-      rs485DataReceived = false;
-      Serial.println("Read register 0x3100 failed!");
-    }
-  }
-
-  void AddressRegistry_3106()
-  {
-    result = node.readInputRegisters(0x3106, 2);
-
-    if (result == node.ku8MBSuccess) {
-      battChargePower = (node.getResponseBuffer(0x00) | node.getResponseBuffer(0x01) << 16)  / 100.0f;
-      Serial.print("Battery Charge Power: ");
-      Serial.println(battChargePower);
-    } else {
-      rs485DataReceived = false;
-      Serial.println("Read register 0x3106 failed!");
-    }
-  }
-
-  void AddressRegistry_310D() 
-  {
-    result = node.readInputRegisters(0x310D, 3);
-
-    if (result == node.ku8MBSuccess) {
-      lcurrent = node.getResponseBuffer(0x00) / 100.0f;
-      Serial.print("Load Current: ");
-      Serial.println(lcurrent);
-  
-      lpower = (node.getResponseBuffer(0x01) | node.getResponseBuffer(0x02) << 16) / 100.0f;
-      Serial.print("Load Power: ");
-      Serial.println(lpower);
-    } else {
-      rs485DataReceived = false;
-      Serial.println("Read register 0x310D failed!");
-    }    
-  } 
-
-  void AddressRegistry_311A() {
-    result = node.readInputRegisters(0x311A, 2);
-   
-    if (result == node.ku8MBSuccess) {    
-      bremaining = node.getResponseBuffer(0x00) / 1.0f;
-      Serial.print("Battery Remaining %: ");
-      Serial.println(bremaining);
-      
-      btemp = node.getResponseBuffer(0x01) / 100.0f;
-      Serial.print("Battery Temperature: ");
-      Serial.println(btemp);
-    } else {
-      rs485DataReceived = false;
-      Serial.println("Read register 0x311A failed!");
-    }
-  }
-
-  void AddressRegistry_331B() {
-    result = node.readInputRegisters(0x331B, 2);
-    
-    if (result == node.ku8MBSuccess) {
-      battOverallCurrent = (node.getResponseBuffer(0x00) | node.getResponseBuffer(0x01) << 16) / 100.0f;
-      Serial.print("Battery Discharge Current: ");
-      Serial.println(battOverallCurrent);
-    } else {
-      rs485DataReceived = false;
-      Serial.println("Read register 0x331B failed!");
-    }
-  }
 
 
 void loop()
