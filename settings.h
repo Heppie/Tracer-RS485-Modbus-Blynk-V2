@@ -43,3 +43,4 @@
 #define vPIN_BATTERY_CHARGE_POWER       V11
 #define vPIN_BATTERY_OVERALL_CURRENT    V12
 #define vPIN_LOAD_ENABLED               V14
+#define vPIN_CHARGING_STATUS            V15
