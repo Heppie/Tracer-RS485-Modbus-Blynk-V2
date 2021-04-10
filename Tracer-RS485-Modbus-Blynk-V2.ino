@@ -15,6 +15,7 @@
 // Developed by @jaminNZx
 // With modifications by @tekk
 
+#include <FS.h>
 #include <ESP8266WiFi.h>
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
@@ -37,6 +38,8 @@ uint8_t result;
 bool rs485DataReceived = true;
 bool loadPoweredOn = true;
 String chargingStatus;
+char* OTApass = "Password1";
+char* BlynkToken = "Dd5XVzR5qSLh6qg_9RpyRnaF80MpPKVw";
 
 #define MAX485_DE D1
 #define MAX485_RE_NEG D2
@@ -74,15 +77,21 @@ void setup()
   node.postTransmission(postTransmission);
   
   Serial.println("Connecting to Wifi...");
+
+  WiFiManagerParameter custom_OTApass("OTApass", "OTA Update Password", OTApass, 15);
+  WiFiManagerParameter custom_BlynkToken("BlynkToken", "Blynk Token", BlynkToken, 40);
+  
   WiFiManager wifiManager;
   WiFi.mode(WIFI_STA);
   //wifiManager.resetSettings();
+  wifiManager.addParameter(&custom_OTApass);
+  wifiManager.addParameter(&custom_BlynkToken);
   wifiManager.autoConnect("SolarMonitor", "12345678");
   
 #if defined(USE_LOCAL_SERVER)
-  Blynk.config(AUTH, SERVER);
+  Blynk.config(BlynkToken, SERVER);
 #else
-  Blynk.config(AUTH);
+  Blynk.config(BlynkToken);
 #endif
 
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -90,6 +99,9 @@ void setup()
     delay(5000);
     ESP.restart();
   }
+
+  strcpy(OTApass, custom_OTApass.getValue());
+  strcpy(BlynkToken, custom_BlynkToken.getValue());
   
   Serial.println("Connected.");
   Serial.print("Connecting to Blynk...");
@@ -104,7 +116,7 @@ void setup()
   Serial.println("Starting ArduinoOTA...");
 
   ArduinoOTA.setHostname(OTA_HOSTNAME);
-  ArduinoOTA.setPassword((const char *)OTA_PASS);
+  ArduinoOTA.setPassword((const char *)OTApass);
 
   ArduinoOTA.onStart([]() {
     String type;

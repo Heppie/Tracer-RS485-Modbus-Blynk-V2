@@ -12,8 +12,7 @@
    Example esp_credentials.h is in ./esp-credentials/esp-credentials.h
 */
 
-// include WIFI credentials and Blynk auth token credentials
-#include "esp_credentials.h"
+
 
 /*
    Local Server Settings
