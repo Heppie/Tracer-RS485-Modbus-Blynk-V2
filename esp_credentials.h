@@ -1,11 +1,11 @@
 
 // Insert your credentials here, or move this folder into your Arduino ;ibraries folder
 
-#define WIFI_SSID             "HeppieNet"
-#define WIFI_PASS             "N0Fr33L0aders"
+#define WIFI_SSID             "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+#define WIFI_PASS             "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 // Blynk API key
-#define AUTH                  "Dd5XVzR5qSLh6qg_9RpyRnaF80MpPKVw"
+#define AUTH                  "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 // OTA Update Password
-#define OTA_PASS              "N0Fr33L0aders"
+#define OTA_PASS              "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
