@@ -24,6 +24,7 @@
 #include <BlynkSimpleEsp8266.h>
 #include <ModbusMaster.h>
 #include "settings.h"
+#include <WiFiManager.h>
 
 #define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
 
@@ -73,13 +74,15 @@ void setup()
   node.postTransmission(postTransmission);
   
   Serial.println("Connecting to Wifi...");
-  
+  WiFiManager wifiManager;
   WiFi.mode(WIFI_STA);
+  //wifiManager.resetSettings();
+  wifiManager.autoConnect("SolarMonitor", "12345678");
   
 #if defined(USE_LOCAL_SERVER)
-  Blynk.begin(AUTH, WIFI_SSID, WIFI_PASS, SERVER);
+  Blynk.config(AUTH, SERVER);
 #else
-  Blynk.begin(AUTH, WIFI_SSID, WIFI_PASS);
+  Blynk.config(AUTH);
 #endif
 
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
