@@ -15,7 +15,9 @@
 // Developed by @jaminNZx
 // With modifications by @tekk
 
-#include <FS.h>
+
+#include "LittleFS.h"
+#include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
@@ -26,6 +28,7 @@
 #include <ModbusMaster.h>
 #include "settings.h"
 #include <WiFiManager.h>
+#include <ArduinoJson.h>
 
 #define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
 
@@ -38,8 +41,8 @@ uint8_t result;
 bool rs485DataReceived = true;
 bool loadPoweredOn = true;
 String chargingStatus;
-char* OTApass = "Password1";
-char* BlynkToken = "Dd5XVzR5qSLh6qg_9RpyRnaF80MpPKVw";
+char* OTApass = (char*)malloc(sizeof(char) * 15);
+char* BlynkToken = (char*)malloc(sizeof(char) * 40);
 
 #define MAX485_DE D1
 #define MAX485_RE_NEG D2
@@ -68,14 +71,36 @@ void setup()
   digitalWrite(MAX485_DE, 0);
 
   Serial.begin(defaultBaudRate);
+  DynamicJsonDocument credentialsJson(1024);
 
-  // Modbus slave ID 1
-  node.begin(1, Serial);
+   Serial.println(F("Inizializing FS..."));
+  if (LittleFS.begin()){
+      Serial.println(F("done."));
+  }else{
+      Serial.println(F("fail."));
+  }
 
-  // callbacks to toggle DE + RE on MAX485
-  node.preTransmission(preTransmission);
-  node.postTransmission(postTransmission);
+  //LittleFS.format();
+
+  File credentialsFile = LittleFS.open(F("/credentials.json"), "r");
   
+ 
+  if (credentialsFile){
+        Serial.println("Read file content!");
+        size_t size = credentialsFile.size();
+        std::unique_ptr<char[]> buf(new char[size]);
+        credentialsFile.readBytes(buf.get(), size);
+        deserializeJson(credentialsJson, buf.get()); 
+               
+        strcpy(OTApass,  credentialsJson["OTApass"]);
+        strcpy(BlynkToken,  credentialsJson["BlynkToken"]);
+
+        credentialsFile.close();
+        credentialsJson.clear();
+    }else{
+        Serial.println("Problem on read file!");
+    }
+
   Serial.println("Connecting to Wifi...");
 
   WiFiManagerParameter custom_OTApass("OTApass", "OTA Update Password", OTApass, 15);
@@ -102,7 +127,25 @@ void setup()
 
   strcpy(OTApass, custom_OTApass.getValue());
   strcpy(BlynkToken, custom_BlynkToken.getValue());
+
+  Serial.println("saving config");
+
+  credentialsJson["OTApass"] = OTApass;
+  credentialsJson["BlynkToken"] = BlynkToken; 
+  serializeJson(credentialsJson, Serial);
+
   
+  credentialsFile = LittleFS.open(F("/credentials.json"), "w");
+ 
+    if (credentialsFile){
+        Serial.println("Write file content!");
+        credentialsFile.print(serializeJson(credentialsJson, credentialsFile));
+        credentialsFile.close();
+        credentialsJson.clear();
+    }else{
+        Serial.println("Problem on create file!");
+    }
+
   Serial.println("Connected.");
   Serial.print("Connecting to Blynk...");
 
@@ -165,6 +208,13 @@ void setup()
   Serial.println("Setup OK!");
   Serial.println("----------------------------");
   Serial.println();
+
+  // Modbus slave ID 1
+  node.begin(1, Serial);
+
+  // callbacks to toggle DE + RE on MAX485
+  node.preTransmission(preTransmission);
+  node.postTransmission(postTransmission);
 }
 
 // --------------------------------------------------------------------------------
